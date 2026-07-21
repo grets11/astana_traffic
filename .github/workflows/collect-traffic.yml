@@ -1,0 +1,39 @@
+name: Collect Astana Traffic Data
+
+on:
+  schedule:
+    # Runs every 30 minutes. Adjust the interval here if you change
+    # POLL_INTERVAL_MINUTES in config.py - keep them in sync.
+    - cron: "*/30 * * * *"
+  workflow_dispatch: {}   # lets you also trigger a run manually from the Actions tab
+
+jobs:
+  poll:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write   # needed so the workflow can commit the updated database back
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run collector (single poll)
+        env:
+          GIS_API_KEY: ${{ secrets.GIS_API_KEY }}
+        run: python collector.py
+
+      - name: Commit and push updated data
+        run: |
+          git config user.name "traffic-bot"
+          git config user.email "traffic-bot@users.noreply.github.com"
+          git add traffic_data.db
+          git diff --cached --quiet || git commit -m "Add traffic poll $(date -u +'%Y-%m-%dT%H:%M:%SZ')"
+          git push
