@@ -1,13 +1,9 @@
 """
 Configuration for the Astana traffic data collector.
 
-SEGMENTS: fixed start/end coordinate pairs along major Astana roads.
-These are approximate — open each pair in 2GIS (or maps.2gis.kz) and
-drag-adjust to the exact stretch of road you want to monitor before
-you start collecting real data. Coordinates are (lat, lon).
-
-Add/remove segments freely. More segments = richer dataset, but each
-segment costs one API call per poll, so keep an eye on your 2GIS quota.
+SEGMENTS: coordinate pairs along 4 major Astana avenues, verified via
+Google Places geocoded street addresses (not hand-guessed), so routes
+follow the real road end-to-end.
 """
 
 API_KEY = "YOUR_2GIS_API_KEY_HERE"  # not used on GitHub Actions — it reads GIS_API_KEY from secrets instead
@@ -21,39 +17,34 @@ ASTANA_LON = 71.4704
 
 SEGMENTS = [
     {
-        "id": "turan_ave_n",
-        "name": "Turan Avenue (north stretch)",
-        "start": {"lat": 51.1310, "lon": 71.4700},
-        "end":   {"lat": 51.1450, "lon": 71.4670},
-    },
-    {
         "id": "kabanbay_batyr",
         "name": "Kabanbay Batyr Avenue",
-        "start": {"lat": 51.1280, "lon": 71.4300},
-        "end":   {"lat": 51.1320, "lon": 71.4650},
+        "start": {"lat": 51.038731, "lon": 71.447182},  # Qabanbay Batyr Ave 1
+        "end":   {"lat": 51.155397, "lon": 71.453405},  # Qabanbay Batyr Ave 30
     },
     {
-        "id": "dostyk_left_bank",
-        "name": "Dostyk Street (left bank)",
-        "start": {"lat": 51.1250, "lon": 71.4600},
-        "end":   {"lat": 51.1360, "lon": 71.4550},
+        "id": "turan_ave",
+        "name": "Turan Avenue",
+        "start": {"lat": 51.155019, "lon": 71.453670},  # Turan Ave 1
+        "end":   {"lat": 51.174146, "lon": 71.406732},  # Turan Ave 55
     },
     {
-        "id": "respublika_ave",
-        "name": "Respublika Avenue (right bank)",
-        "start": {"lat": 51.1550, "lon": 71.4300},
-        "end":   {"lat": 51.1750, "lon": 71.4400},
+        "id": "mangilik_el",
+        "name": "Mangilik El Avenue",
+        "start": {"lat": 51.059462, "lon": 71.413841},  # Ministry of Education, Mangilik El Ave 8
+        "end":   {"lat": 51.150303, "lon": 71.444596},  # Mangilik El Avenue 55/23
     },
     {
-        "id": "abay_ave",
-        "name": "Abay Avenue",
-        "start": {"lat": 51.1600, "lon": 71.4100},
-        "end":   {"lat": 51.1650, "lon": 71.4350},
+        "id": "tauelsizdik_ave",
+        "name": "Tauelsizdik Avenue",
+        "start": {"lat": 51.154514, "lon": 71.454131},  # Tauelsizdik Ave 1
+        "end":   {"lat": 51.103720, "lon": 71.454710},  # Tauelsizdik Ave 34
     },
 ]
 
 # How often to poll, in minutes. Keep this matching the cron schedule
-# in .github/workflows/collect-traffic.yml (currently every 30 min).
+# in .github/workflows/collect-traffic.yml.
 POLL_INTERVAL_MINUTES = 30
 
 DB_PATH = "traffic_data.db"
+
