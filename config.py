@@ -40,6 +40,30 @@ SEGMENTS = [
         "start": {"lat": 51.154514, "lon": 71.454131},  # Tauelsizdik Ave 1
         "end":   {"lat": 51.103720, "lon": 71.454710},  # Tauelsizdik Ave 34
     },
+    {
+        "id": "turan_ave_n",
+        "name": "Turan Avenue (north stretch)",
+        "start": {"lat": 51.1310, "lon": 71.4700},
+        "end":   {"lat": 51.1450, "lon": 71.4670},
+    },
+    {
+        "id": "dostyk_left_bank",
+        "name": "Dostyk Street (left bank)",
+        "start": {"lat": 51.1250, "lon": 71.4600},
+        "end":   {"lat": 51.1360, "lon": 71.4550},
+    },
+    {
+        "id": "respublika_ave",
+        "name": "Respublika Avenue (right bank)",
+        "start": {"lat": 51.1550, "lon": 71.4300},
+        "end":   {"lat": 51.1750, "lon": 71.4400},
+    },
+    {
+        "id": "abay_ave",
+        "name": "Abay Avenue",
+        "start": {"lat": 51.1600, "lon": 71.4100},
+        "end":   {"lat": 51.1650, "lon": 71.4350},
+    },
 ]
 
 # How often to poll, in minutes. Keep this matching the cron schedule
