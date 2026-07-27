@@ -117,6 +117,64 @@ def fetch_segment_duration(session: requests.Session, api_key: str, segment: dic
         return None
 
 
+def fetch_segment_duration_with_retry(session: requests.Session, api_key: str, segment: dict, max_retries: int = 2) -> dict | None:
+    """Calls the routing API directly (rather than reusing fetch_segment_duration)
+    so we can inspect the raw status code and retry specifically on 429
+    (rate limited) responses. Your 2GIS key appears to hit short,
+    self-resolving rate limits (not the monthly quota) — a brief pause and
+    retry avoids silently losing that segment's reading for this poll."""
+    payload = {
+        "points": [
+            {"type": "stop", "lat": segment["start"]["lat"], "lon": segment["start"]["lon"]},
+            {"type": "stop", "lat": segment["end"]["lat"], "lon": segment["end"]["lon"]},
+        ],
+        "locale": "en",
+        "transport": "driving",
+        "route_mode": "fastest",
+        "traffic_mode": "jam",
+    }
+    for attempt in range(max_retries + 1):
+        try:
+            resp = session.post(config.ROUTING_URL, params={"key": api_key}, json=payload, timeout=15)
+        except requests.RequestException as e:
+            log.error(f"{segment['id']}: request failed: {e}")
+            return None
+
+        if resp.status_code == 429:
+            if attempt < max_retries:
+                wait = 5 * (attempt + 1)
+                log.warning(f"{segment['id']}: rate limited (429), retrying in {wait}s (attempt {attempt + 1}/{max_retries})")
+                time.sleep(wait)
+                continue
+            log.error(f"{segment['id']}: still rate limited after {max_retries} retries, giving up for this poll")
+            return None
+
+        try:
+            resp.raise_for_status()
+        except requests.RequestException as e:
+            log.error(f"{segment['id']}: request failed: {e}")
+            return None
+
+        data = resp.json()
+        results = data.get("result") or []
+        if not results:
+            log.warning(f"No route returned for segment {segment['id']}")
+            return None
+        best = results[0]
+        duration_sec = best.get("total_duration")
+        distance_m = best.get("total_distance")
+        avg_speed_kmh = None
+        if duration_sec and distance_m and duration_sec > 0:
+            avg_speed_kmh = (distance_m / 1000) / (duration_sec / 3600)
+        return {
+            "duration_sec": duration_sec,
+            "distance_m": distance_m,
+            "avg_speed_kmh": avg_speed_kmh,
+            "raw": str(data)[:2000],
+        }
+    return None
+
+
 def fetch_weather(session: requests.Session) -> dict | None:
     """Pull current weather for Astana from Open-Meteo (free, no key)."""
     params = {
@@ -144,6 +202,8 @@ def fetch_weather(session: requests.Session) -> dict | None:
 def poll_once(conn: sqlite3.Connection, api_key: str) -> None:
     session = requests.Session()
     timestamp = datetime.now(timezone.utc).isoformat()
+    succeeded = 0
+    failed = 0
 
     weather = fetch_weather(session)
     if weather:
@@ -156,7 +216,7 @@ def poll_once(conn: sqlite3.Connection, api_key: str) -> None:
         )
 
     for segment in config.SEGMENTS:
-        result = fetch_segment_duration(session, api_key, segment)
+        result = fetch_segment_duration_with_retry(session, api_key, segment)
         if result:
             conn.execute(
                 """INSERT INTO traffic_readings
@@ -170,11 +230,20 @@ def poll_once(conn: sqlite3.Connection, api_key: str) -> None:
                 f"{result['avg_speed_kmh']:.1f} km/h" if result["avg_speed_kmh"] else
                 f"{segment['id']}: {result['duration_sec']}s"
             )
-        # Be polite to the API / respect rate limits
-        time.sleep(0.5)
+            succeeded += 1
+        else:
+            log.error(f"{segment['id']}: NO ROW SAVED this poll (see error above)")
+            failed += 1
+        # Slightly more spacing than before (was 0.5s) — with 8 segments now
+        # instead of 4-5, tighter spacing was more likely to trip 2GIS's
+        # short-term rate limit.
+        time.sleep(1.5)
 
     conn.commit()
-    log.info(f"Poll complete at {timestamp}")
+    if failed > 0:
+        log.warning(f"Poll complete at {timestamp} \u2014 {succeeded} succeeded, {failed} FAILED (rows missing this cycle)")
+    else:
+        log.info(f"Poll complete at {timestamp} \u2014 all {succeeded} segments succeeded")
 
 
 def main():
