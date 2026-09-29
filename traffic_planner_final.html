@@ -1,0 +1,893 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Astana Traffic Planner</title>
+<script src="https://mapgl.2gis.com/api/js/v1"></script>
+<style>
+  :root {
+    --bg-base: #F6F8FB;
+    --bg-panel: #FFFFFF;
+    --bg-panel-solid: #FFFFFF;
+    --bg-sunken: #F1F5F9;
+    --border-soft: #E4E9F0;
+    --border-firm: #D3DBE5;
+    --accent-gold: #A96A08;
+    --accent-turquoise: #0E8577;
+    --text-primary: #1B2430;
+    --text-muted: #64748B;
+    --shadow-sm: 0 1px 2px rgba(16, 24, 40, 0.04);
+    --shadow-md: 0 1px 3px rgba(16, 24, 40, 0.06), 0 10px 28px rgba(16, 24, 40, 0.05);
+    --font-display: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+    --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0; width: 100%; min-height: 100%;
+    background: var(--bg-base); color: var(--text-primary);
+    font-family: var(--font-display);
+    -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale;
+  }
+  #app { max-width: 1080px; margin: 0 auto; padding: 40px 24px 72px; }
+
+  header { margin-bottom: 26px; }
+  header .eyebrow {
+    font-size: 11px; letter-spacing: 0.16em; text-transform: uppercase;
+    color: var(--accent-turquoise); font-weight: 700;
+  }
+  header h1 {
+    margin: 8px 0 8px 0; font-size: 30px; font-weight: 700; letter-spacing: -0.02em;
+  }
+  header p { margin: 0; font-size: 14px; color: var(--text-muted); max-width: 660px; line-height: 1.6; }
+
+  .controls {
+    display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-end;
+    background: var(--bg-panel); border: 1px solid var(--border-soft);
+    border-radius: 16px; padding: 20px 22px; margin-bottom: 18px;
+    box-shadow: var(--shadow-md);
+  }
+  .field { display: flex; flex-direction: column; gap: 7px; }
+  .field label {
+    font-size: 10.5px; letter-spacing: 0.09em; text-transform: uppercase;
+    color: var(--text-muted); font-weight: 700;
+  }
+  .field select {
+    background: var(--bg-panel); border: 1px solid var(--border-firm);
+    color: var(--text-primary); border-radius: 10px; padding: 10px 12px;
+    font-family: var(--font-display); font-size: 13.5px; min-width: 240px;
+    cursor: pointer; box-shadow: var(--shadow-sm); transition: border-color .12s ease;
+  }
+  .field select:hover { border-color: #B9C4D2; }
+  .field select:focus {
+    outline: none; border-color: var(--accent-turquoise);
+    box-shadow: 0 0 0 3px rgba(14, 133, 119, 0.14);
+  }
+  .field select:disabled { color: #A3AEBD; background: var(--bg-sunken); }
+
+  .callouts { display: flex; gap: 12px; flex-wrap: wrap; margin-left: auto; }
+  .callout {
+    background: var(--bg-sunken); border: 1px solid var(--border-soft);
+    border-radius: 12px; padding: 10px 15px; min-width: 158px;
+  }
+  .callout .label {
+    font-size: 9.5px; letter-spacing: 0.08em; text-transform: uppercase;
+    color: var(--text-muted); font-weight: 700;
+  }
+  .callout .value { font-family: var(--font-mono); font-size: 13.5px; font-weight: 600; margin-top: 3px; }
+  .callout.best .value { color: #128A5E; }
+  .callout.worst .value { color: #C0392B; }
+  .callout.selected .value { color: var(--accent-turquoise); }
+
+  .horizon { color: var(--text-muted); font-size: 11.5px; margin-top: 10px; font-family: var(--font-mono); }
+
+  .heatmap-wrap {
+    background: var(--bg-panel); border: 1px solid var(--border-soft);
+    border-radius: 16px; padding: 22px; overflow-x: auto; margin-bottom: 18px;
+    box-shadow: var(--shadow-md);
+  }
+  .scale-toggle {
+    display: flex; align-items: center; gap: 18px; flex-wrap: wrap;
+    font-size: 12.5px; color: var(--text-muted); margin-bottom: 14px;
+  }
+  .scale-toggle-label { font-weight: 700; color: var(--text-primary); }
+  .scale-toggle label { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; }
+  .scale-toggle input[type="radio"] { accent-color: var(--accent-turquoise); cursor: pointer; }
+
+  table.heatmap { border-collapse: separate; border-spacing: 3px; width: 100%; min-width: 780px; }
+  table.heatmap th { font-weight: 400; }
+  table.heatmap th.hour-label {
+    font-family: var(--font-mono); font-size: 9.5px; color: var(--text-muted);
+    padding-bottom: 8px; text-align: center;
+  }
+  table.heatmap th.day-label {
+    font-size: 12px; color: var(--text-primary); text-align: right;
+    padding-right: 12px; white-space: nowrap; font-weight: 600;
+  }
+  table.heatmap td.cell {
+    width: 28px; height: 26px; border-radius: 5px; cursor: pointer;
+    transition: transform .08s ease, outline .1s ease;
+  }
+  table.heatmap td.cell:hover {
+    outline: 2px solid var(--text-primary); outline-offset: 1px;
+  }
+  table.heatmap td.cell.selected {
+    outline: 2.5px solid var(--accent-turquoise); outline-offset: 1px;
+    box-shadow: 0 0 0 4px rgba(14, 133, 119, 0.16);
+  }
+  table.heatmap td.cell.nodata {
+    background-color: var(--bg-sunken) !important;
+    box-shadow: inset 0 0 0 1px var(--border-soft);
+    cursor: default;
+  }
+  table.heatmap td.cell.nodata:hover { outline: none; }
+  table.heatmap td.cell.lown { box-shadow: inset 0 0 0 2px rgba(169, 106, 8, 0.85); }
+
+  #tooltip {
+    position: fixed; display: none; z-index: 50;
+    background: var(--bg-panel); border: 1px solid var(--border-firm);
+    border-radius: 10px; padding: 10px 13px; font-size: 12px;
+    font-family: var(--font-mono); pointer-events: none; color: var(--text-primary);
+    box-shadow: 0 8px 28px rgba(16, 24, 40, 0.14);
+  }
+  #tooltip .t-time { color: var(--accent-turquoise); font-weight: 700; margin-bottom: 4px; }
+  #tooltip .t-hint { color: var(--text-muted); font-size: 10.5px; margin-top: 5px; }
+
+  .legend {
+    display: flex; align-items: center; gap: 18px; margin-top: 18px; flex-wrap: wrap;
+    font-size: 11px; color: var(--text-muted); font-family: var(--font-mono);
+  }
+  .legend .swatch { display: inline-flex; align-items: center; gap: 6px; }
+  .legend .dot { width: 12px; height: 12px; border-radius: 3px; }
+
+  .map-wrap {
+    position: relative; width: 100%; height: 420px;
+    border-radius: 16px; overflow: hidden;
+    border: 1px solid var(--border-soft); box-shadow: var(--shadow-md);
+  }
+  .map-container { position: absolute; inset: 0; background: var(--bg-sunken); }
+  .map-loading {
+    position: absolute; inset: 0; z-index: 5;
+    display: flex; align-items: center; justify-content: center;
+    color: var(--text-muted); font-size: 12.5px; font-family: var(--font-mono);
+    background: var(--bg-sunken); pointer-events: none;
+  }
+  .route-warning {
+    margin-top: 10px; padding: 10px 14px; border-radius: 10px;
+    background: #FDF6E7; border: 1px solid #EBD9AE;
+    color: #8A5606; font-size: 11.5px; line-height: 1.55;
+  }
+
+  .caption {
+    margin-top: 30px; font-size: 11.5px; color: var(--text-muted); line-height: 1.75;
+    border-top: 1px solid var(--border-soft); padding-top: 18px;
+  }
+  .caption strong { color: var(--text-primary); }
+  .caption code {
+    font-family: var(--font-mono); font-size: 10.5px;
+    background: var(--bg-sunken); padding: 1px 5px; border-radius: 4px;
+  }
+
+  #key-overlay {
+    position: fixed; inset: 0; z-index: 100;
+    background: rgba(228, 234, 241, 0.82); backdrop-filter: blur(3px);
+    display: flex; align-items: center; justify-content: center;
+  }
+  #key-overlay .box {
+    background: var(--bg-panel); border: 1px solid var(--border-soft);
+    border-radius: 16px; padding: 26px 28px; width: 356px; max-width: 88%;
+    box-shadow: 0 18px 48px rgba(16, 24, 40, 0.18);
+  }
+  #key-overlay .eyebrow {
+    font-size: 10.5px; letter-spacing: 0.13em; text-transform: uppercase;
+    color: var(--accent-turquoise); font-weight: 700; margin-bottom: 8px;
+  }
+  #key-overlay h3 { margin: 0 0 10px 0; font-size: 17px; }
+  #key-overlay p { font-size: 12px; color: var(--text-muted); line-height: 1.6; margin: 0 0 16px 0; }
+  #key-overlay input {
+    width: 100%; padding: 11px 12px; border-radius: 10px;
+    border: 1px solid var(--border-firm); background: var(--bg-panel);
+    color: var(--text-primary); font-family: var(--font-mono); font-size: 12px;
+    margin-bottom: 12px;
+  }
+  #key-overlay input:focus {
+    outline: none; border-color: var(--accent-turquoise);
+    box-shadow: 0 0 0 3px rgba(14, 133, 119, 0.14);
+  }
+  #key-overlay button.submit {
+    width: 100%; padding: 11px; border-radius: 10px; border: none;
+    background: var(--accent-turquoise); color: #FFFFFF; font-weight: 700;
+    font-size: 13px; cursor: pointer; transition: background .12s ease;
+  }
+  #key-overlay button.submit:hover { background: #0B6F63; }
+  #key-overlay .skip {
+    width: 100%; margin-top: 10px; background: transparent; border: none;
+    color: var(--text-muted); font-size: 11px; cursor: pointer; text-decoration: underline;
+  }
+
+  @media (max-width: 640px) {
+    #app { padding: 28px 16px 56px; }
+    .controls { flex-direction: column; align-items: stretch; }
+    .callouts { margin-left: 0; }
+    .field select { min-width: 100%; }
+  }
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <span class="eyebrow">Astana &middot; Avenue Forecast</span>
+    <h1>Traffic Planner</h1>
+    <p>Congestion forecast for the next seven days, produced by scoring each future date and hour through the selected predictor. Hours the collector has never sampled are left blank rather than guessed. Click any cell to jump the day/time selectors there.</p>
+    <p id="horizon-line" class="horizon"></p>
+  </header>
+
+  <div class="controls">
+    <div class="field">
+      <label for="avenue-select">Avenue</label>
+      <select id="avenue-select"></select>
+    </div>
+    <div class="field">
+      <label for="day-select">Day</label>
+      <select id="day-select"></select>
+    </div>
+    <div class="field">
+      <label for="hour-select">Time</label>
+      <select id="hour-select"></select>
+    </div>
+    <div class="callouts">
+      <div class="callout selected"><div class="label">Selected time</div><div class="value" id="selected-result">&mdash;</div></div>
+      <div class="callout best"><div class="label">Best time (this day)</div><div class="value" id="best-time">&mdash;</div></div>
+      <div class="callout worst"><div class="label">Worst time (this day)</div><div class="value" id="worst-time">&mdash;</div></div>
+    </div>
+  </div>
+
+  <div class="scale-toggle">
+    <span class="scale-toggle-label">Color scale:</span>
+    <label><input type="radio" name="scale-mode" value="global" checked /> Original (compare across all avenues)</label>
+    <label><input type="radio" name="scale-mode" value="normalized" /> Normalized (this avenue's own range)</label>
+  </div>
+
+  <div class="heatmap-wrap">
+    <table class="heatmap" id="heatmap-table"></table>
+    <div class="legend" id="legend"></div>
+  </div>
+
+  <div class="map-wrap">
+    <div class="map-container" id="map-container"></div>
+    <div class="map-loading" id="map-loading">Enter your key above to load the map</div>
+  </div>
+  <div class="route-warning" id="route-warning" style="display:none;"></div>
+
+  <div class="caption">
+    <strong>How this forecast is built:</strong> the new avenues are trimmed to a shared observation window, because kabanbay_batyr joined the collector four days earlier than the others and its extra evening coverage would otherwise be read as a difference in traffic rather than in sampling. Three predictors compete on blocked time-series cross-validation &mdash; the tuned Ridge, a gradient-boosted tree, and a plain climatology grid &mdash; and the winner is chosen separately for the new and original avenues. A model only wins if its lead exceeds fold-to-fold noise; otherwise the climatology grid is used, because a lead smaller than its own standard deviation is not evidence. The chosen predictor is then evaluated at each of the next seven dates, so every row is a genuine forward prediction for that calendar day rather than a replay of history. The lag feature <code>prev_congestion_score</code> is deliberately excluded: there is no previous reading for a future hour, so any model relying on it cannot fill this grid. Free-flow speed is each avenue's own fastest observed reading, so 1.00&times; means "as fast as this road has ever been seen". Hours the collector has never sampled stay <em>blank and unselectable</em>. Cells outlined in amber rest on fewer than three underlying readings. <span id="model-note"></span> <span id="coverage-note"></span>
+  </div>
+</div>
+
+<div id="tooltip"></div>
+
+<div id="key-overlay">
+  <div class="box">
+    <div class="eyebrow">Setup</div>
+    <h3>Enter your 2GIS API key</h3>
+    <p>Used only in your browser to load map tiles and the real road route for the selected avenue &mdash; not saved or sent anywhere else. You can skip this and just use the heatmap without the map.</p>
+    <input id="key-input" type="text" placeholder="Paste your 2GIS API key" autocomplete="off" />
+    <button class="submit" id="key-submit">Load map</button>
+    <button class="skip" id="key-skip">Skip &mdash; just show the heatmap</button>
+  </div>
+</div>
+
+<script>
+  const DATA = {"avenues":[{"id":"abay_ave","name":"Abay Avenue","medianDistanceM":3314,"freeFlowSpeedKmh":27.2,"start":{"lat":51.1662505,"lon":71.4012485},"end":{"lat":51.1689017,"lon":71.4346925},"collectorEndpoints":{"start":{"lat":51.16,"lon":71.41},"end":{"lat":51.165,"lon":71.435}},"predictor":"Climatology grid"},{"id":"dostyk_left_bank","name":"Dostyk Street (left bank)","medianDistanceM":2039,"freeFlowSpeedKmh":26.1,"start":{"lat":51.1263996,"lon":71.4183996},"end":{"lat":51.1253445,"lon":71.4334371},"collectorEndpoints":{"start":{"lat":51.125,"lon":71.46},"end":{"lat":51.136,"lon":71.455}},"predictor":"Climatology grid"},{"id":"kabanbay_batyr","name":"Kabanbay Batyr Avenue","medianDistanceM":14534,"freeFlowSpeedKmh":43.6,"start":{"lat":51.038731,"lon":71.447182},"end":{"lat":51.155397,"lon":71.453405},"collectorEndpoints":{"start":{"lat":51.038731,"lon":71.447182},"end":{"lat":51.155397,"lon":71.453405}},"predictor":"Climatology grid"},{"id":"mangilik_el","name":"Mangilik El Avenue","medianDistanceM":11921,"freeFlowSpeedKmh":40.7,"start":{"lat":51.059462,"lon":71.413841},"end":{"lat":51.150303,"lon":71.444596},"collectorEndpoints":{"start":{"lat":51.059462,"lon":71.413841},"end":{"lat":51.150303,"lon":71.444596}},"predictor":"Climatology grid"},{"id":"respublika_ave","name":"Respublika Avenue (right bank)","medianDistanceM":3705,"freeFlowSpeedKmh":31.4,"start":{"lat":51.1575295,"lon":71.4288893},"end":{"lat":51.1665475,"lon":71.4280701},"collectorEndpoints":{"start":{"lat":51.155,"lon":71.43},"end":{"lat":51.175,"lon":71.44}},"predictor":"Climatology grid"},{"id":"tauelsizdik_ave","name":"Tauelsizdik Avenue","medianDistanceM":7565,"freeFlowSpeedKmh":33.0,"start":{"lat":51.154514,"lon":71.454131},"end":{"lat":51.10372,"lon":71.45471},"collectorEndpoints":{"start":{"lat":51.154514,"lon":71.454131},"end":{"lat":51.10372,"lon":71.45471}},"predictor":"Climatology grid"},{"id":"turan_ave","name":"Turan Avenue","medianDistanceM":5161,"freeFlowSpeedKmh":33.5,"start":{"lat":51.070816,"lon":71.395235},"end":{"lat":51.174146,"lon":71.406732},"collectorEndpoints":{"start":{"lat":51.155019,"lon":71.45367},"end":{"lat":51.174146,"lon":71.406732}},"predictor":"Climatology grid"},{"id":"turan_ave_n","name":"Turan Avenue (north stretch)","medianDistanceM":2473,"freeFlowSpeedKmh":29.6,"start":{"lat":51.1553744,"lon":71.4099876},"end":{"lat":51.1143142,"lon":71.3958173},"collectorEndpoints":{"start":{"lat":51.131,"lon":71.47},"end":{"lat":51.145,"lon":71.467}},"predictor":"Climatology grid"},{"id":"__all__","name":"All avenues (average)","isCombined":true,"medianDistanceM":4433,"freeFlowSpeedKmh":33.1,"predictor":"blend"}],"days":[{"date":"2026-08-06","dow":3},{"date":"2026-08-07","dow":4},{"date":"2026-08-08","dow":5},{"date":"2026-08-09","dow":6},{"date":"2026-08-10","dow":0},{"date":"2026-08-11","dow":1},{"date":"2026-08-12","dow":2}],"grid":{"kabanbay_batyr":[[null,null,1.031,1.02,1.016,1.066,1.084,1.371,1.639,1.484,1.384,1.449,1.464,1.44,1.498,1.472,1.571,1.572,null,null,null,null,null,null],[null,null,1.031,1.02,1.016,1.066,1.084,1.371,1.639,1.484,1.384,1.449,1.464,1.44,1.498,1.472,1.571,1.572,null,null,null,null,null,null],[null,null,1.04,1.036,1.032,null,1.068,null,null,1.185,1.31,null,1.345,null,1.394,1.44,null,null,null,null,null,null,null,null],[null,null,1.04,1.036,1.032,null,1.068,null,null,1.185,1.31,null,1.345,null,1.394,1.44,null,null,null,null,null,null,null,null],[null,null,1.031,1.02,1.016,1.066,1.084,1.371,1.639,1.484,1.384,1.449,1.464,1.44,1.498,1.472,1.571,1.572,null,null,null,null,null,null],[null,null,1.031,1.02,1.016,1.066,1.084,1.371,1.639,1.484,1.384,1.449,1.464,1.44,1.498,1.472,1.571,1.572,null,null,null,null,null,null],[null,null,1.031,1.02,1.016,1.066,1.084,1.371,1.639,1.484,1.384,1.449,1.464,1.44,1.498,1.472,1.571,1.572,null,null,null,null,null,null]],"turan_ave":[[null,null,1.101,1.075,1.055,1.075,1.102,1.288,1.509,1.448,1.425,1.498,1.55,1.441,1.491,1.563,1.539,1.526,null,null,null,null,null,null],[null,null,1.101,1.075,1.055,1.075,1.102,1.288,1.509,1.448,1.425,1.498,1.55,1.441,1.491,1.563,1.539,1.526,null,null,null,null,null,null],[null,null,1.146,1.095,1.061,null,1.095,null,null,1.135,1.279,null,1.409,null,1.332,1.371,null,null,null,null,null,null,null,null],[null,null,1.146,1.095,1.061,null,1.095,null,null,1.135,1.279,null,1.409,null,1.332,1.371,null,null,null,null,null,null,null,null],[null,null,1.101,1.075,1.055,1.075,1.102,1.288,1.509,1.448,1.425,1.498,1.55,1.441,1.491,1.563,1.539,1.526,null,null,null,null,null,null],[null,null,1.101,1.075,1.055,1.075,1.102,1.288,1.509,1.448,1.425,1.498,1.55,1.441,1.491,1.563,1.539,1.526,null,null,null,null,null,null],[null,null,1.101,1.075,1.055,1.075,1.102,1.288,1.509,1.448,1.425,1.498,1.55,1.441,1.491,1.563,1.539,1.526,null,null,null,null,null,null]],"mangilik_el":[[null,null,1.04,1.033,1.024,1.067,1.073,1.416,1.744,1.491,1.467,1.533,1.559,1.546,1.603,1.63,1.652,1.654,null,null,null,null,null,null],[null,null,1.04,1.033,1.024,1.067,1.073,1.416,1.744,1.491,1.467,1.533,1.559,1.546,1.603,1.63,1.652,1.654,null,null,null,null,null,null],[null,null,1.08,1.053,1.048,null,1.067,null,null,1.216,1.368,null,1.413,null,1.503,1.52,null,null,null,null,null,null,null,null],[null,null,1.08,1.053,1.048,null,1.067,null,null,1.216,1.368,null,1.413,null,1.503,1.52,null,null,null,null,null,null,null,null],[null,null,1.04,1.033,1.024,1.067,1.073,1.416,1.744,1.491,1.467,1.533,1.559,1.546,1.603,1.63,1.652,1.654,null,null,null,null,null,null],[null,null,1.04,1.033,1.024,1.067,1.073,1.416,1.744,1.491,1.467,1.533,1.559,1.546,1.603,1.63,1.652,1.654,null,null,null,null,null,null],[null,null,1.04,1.033,1.024,1.067,1.073,1.416,1.744,1.491,1.467,1.533,1.559,1.546,1.603,1.63,1.652,1.654,null,null,null,null,null,null]],"tauelsizdik_ave":[[null,null,1.038,1.038,1.043,1.062,1.105,1.266,1.369,1.317,1.393,1.344,1.437,1.449,1.484,1.412,1.466,1.54,null,null,null,null,null,null],[null,null,1.038,1.038,1.043,1.062,1.105,1.266,1.369,1.317,1.393,1.344,1.437,1.449,1.484,1.412,1.466,1.54,null,null,null,null,null,null],[null,null,1.048,1.04,1.035,null,1.076,null,null,1.164,1.271,null,1.313,null,1.358,1.397,null,null,null,null,null,null,null,null],[null,null,1.048,1.04,1.035,null,1.076,null,null,1.164,1.271,null,1.313,null,1.358,1.397,null,null,null,null,null,null,null,null],[null,null,1.038,1.038,1.043,1.062,1.105,1.266,1.369,1.317,1.393,1.344,1.437,1.449,1.484,1.412,1.466,1.54,null,null,null,null,null,null],[null,null,1.038,1.038,1.043,1.062,1.105,1.266,1.369,1.317,1.393,1.344,1.437,1.449,1.484,1.412,1.466,1.54,null,null,null,null,null,null],[null,null,1.038,1.038,1.043,1.062,1.105,1.266,1.369,1.317,1.393,1.344,1.437,1.449,1.484,1.412,1.466,1.54,null,null,null,null,null,null]],"turan_ave_n":[[1.136,null,1.117,1.114,1.109,1.078,1.143,1.272,1.539,1.42,1.391,1.462,1.483,1.469,1.511,1.718,1.554,1.804,2.01,2.056,1.651,1.442,null,1.279],[1.136,null,1.117,1.114,1.109,1.078,1.143,1.272,1.539,1.42,1.391,1.462,1.483,1.469,1.511,1.718,1.554,1.804,2.01,2.056,1.651,1.442,null,1.279],[null,null,1.09,1.112,1.116,null,1.181,null,null,1.256,1.312,null,1.352,null,1.42,1.395,null,null,null,null,null,null,null,null],[null,null,1.09,1.112,1.116,null,1.181,null,null,1.256,1.312,null,1.352,null,1.42,1.395,null,null,null,null,null,null,null,null],[1.136,null,1.117,1.114,1.109,1.078,1.143,1.272,1.539,1.42,1.391,1.462,1.483,1.469,1.511,1.718,1.554,1.804,2.01,2.056,1.651,1.442,null,1.279],[1.136,null,1.117,1.114,1.109,1.078,1.143,1.272,1.539,1.42,1.391,1.462,1.483,1.469,1.511,1.718,1.554,1.804,2.01,2.056,1.651,1.442,null,1.279],[1.136,null,1.117,1.114,1.109,1.078,1.143,1.272,1.539,1.42,1.391,1.462,1.483,1.469,1.511,1.718,1.554,1.804,2.01,2.056,1.651,1.442,null,1.279]],"dostyk_left_bank":[[1.144,null,1.112,1.074,1.13,1.144,1.141,1.246,1.442,1.45,1.378,1.41,1.402,1.402,1.487,1.598,1.413,1.515,1.685,1.512,1.457,1.437,null,1.318],[1.144,null,1.112,1.074,1.13,1.144,1.141,1.246,1.442,1.45,1.378,1.41,1.402,1.402,1.487,1.598,1.413,1.515,1.685,1.512,1.457,1.437,null,1.318],[null,null,1.128,1.077,1.055,null,1.149,null,null,1.27,1.347,null,1.293,null,1.348,1.397,null,null,null,null,null,null,null,null],[null,null,1.128,1.077,1.055,null,1.149,null,null,1.27,1.347,null,1.293,null,1.348,1.397,null,null,null,null,null,null,null,null],[1.144,null,1.112,1.074,1.13,1.144,1.141,1.246,1.442,1.45,1.378,1.41,1.402,1.402,1.487,1.598,1.413,1.515,1.685,1.512,1.457,1.437,null,1.318],[1.144,null,1.112,1.074,1.13,1.144,1.141,1.246,1.442,1.45,1.378,1.41,1.402,1.402,1.487,1.598,1.413,1.515,1.685,1.512,1.457,1.437,null,1.318],[1.144,null,1.112,1.074,1.13,1.144,1.141,1.246,1.442,1.45,1.378,1.41,1.402,1.402,1.487,1.598,1.413,1.515,1.685,1.512,1.457,1.437,null,1.318]],"respublika_ave":[[1.134,null,1.062,1.038,1.07,1.035,1.08,1.261,1.481,1.416,1.47,1.593,1.494,1.47,1.478,1.545,1.485,1.586,1.491,1.464,1.279,1.261,null,1.153],[1.134,null,1.062,1.038,1.07,1.035,1.08,1.261,1.481,1.416,1.47,1.593,1.494,1.47,1.478,1.545,1.485,1.586,1.491,1.464,1.279,1.261,null,1.153],[null,null,1.091,1.068,1.105,null,1.082,null,null,1.334,1.395,null,1.422,null,1.372,1.569,null,null,null,null,null,null,null,null],[null,null,1.091,1.068,1.105,null,1.082,null,null,1.334,1.395,null,1.422,null,1.372,1.569,null,null,null,null,null,null,null,null],[1.134,null,1.062,1.038,1.07,1.035,1.08,1.261,1.481,1.416,1.47,1.593,1.494,1.47,1.478,1.545,1.485,1.586,1.491,1.464,1.279,1.261,null,1.153],[1.134,null,1.062,1.038,1.07,1.035,1.08,1.261,1.481,1.416,1.47,1.593,1.494,1.47,1.478,1.545,1.485,1.586,1.491,1.464,1.279,1.261,null,1.153],[1.134,null,1.062,1.038,1.07,1.035,1.08,1.261,1.481,1.416,1.47,1.593,1.494,1.47,1.478,1.545,1.485,1.586,1.491,1.464,1.279,1.261,null,1.153]],"abay_ave":[[1.216,null,1.149,1.107,1.108,1.112,1.154,1.364,1.722,1.655,1.66,1.757,1.775,1.699,1.786,1.823,1.7,1.961,1.984,1.759,1.6,1.421,null,1.346],[1.216,null,1.149,1.107,1.108,1.112,1.154,1.364,1.722,1.655,1.66,1.757,1.775,1.699,1.786,1.823,1.7,1.961,1.984,1.759,1.6,1.421,null,1.346],[null,null,1.168,1.123,1.095,null,1.169,null,null,1.338,1.513,null,1.525,null,1.567,1.549,null,null,null,null,null,null,null,null],[null,null,1.168,1.123,1.095,null,1.169,null,null,1.338,1.513,null,1.525,null,1.567,1.549,null,null,null,null,null,null,null,null],[1.216,null,1.149,1.107,1.108,1.112,1.154,1.364,1.722,1.655,1.66,1.757,1.775,1.699,1.786,1.823,1.7,1.961,1.984,1.759,1.6,1.421,null,1.346],[1.216,null,1.149,1.107,1.108,1.112,1.154,1.364,1.722,1.655,1.66,1.757,1.775,1.699,1.786,1.823,1.7,1.961,1.984,1.759,1.6,1.421,null,1.346],[1.216,null,1.149,1.107,1.108,1.112,1.154,1.364,1.722,1.655,1.66,1.757,1.775,1.699,1.786,1.823,1.7,1.961,1.984,1.759,1.6,1.421,null,1.346]],"__all__":[[1.157,null,1.081,1.062,1.069,1.08,1.11,1.31,1.556,1.46,1.446,1.506,1.52,1.49,1.542,1.595,1.547,1.645,1.792,1.698,1.497,1.39,null,1.274],[1.157,null,1.081,1.062,1.069,1.08,1.11,1.31,1.556,1.46,1.446,1.506,1.52,1.49,1.542,1.595,1.547,1.645,1.792,1.698,1.497,1.39,null,1.274],[null,null,1.099,1.075,1.068,null,1.111,null,null,1.237,1.349,null,1.384,null,1.412,1.455,null,null,null,null,null,null,null,null],[null,null,1.099,1.075,1.068,null,1.111,null,null,1.237,1.349,null,1.384,null,1.412,1.455,null,null,null,null,null,null,null,null],[1.157,null,1.081,1.062,1.069,1.08,1.11,1.31,1.556,1.46,1.446,1.506,1.52,1.49,1.542,1.595,1.547,1.645,1.792,1.698,1.497,1.39,null,1.274],[1.157,null,1.081,1.062,1.069,1.08,1.11,1.31,1.556,1.46,1.446,1.506,1.52,1.49,1.542,1.595,1.547,1.645,1.792,1.698,1.497,1.39,null,1.274],[1.157,null,1.081,1.062,1.069,1.08,1.11,1.31,1.556,1.46,1.446,1.506,1.52,1.49,1.542,1.595,1.547,1.645,1.792,1.698,1.497,1.39,null,1.274]]},"counts":{"kabanbay_batyr":[[0,0,8,9,9,2,6,1,2,3,3,2,2,4,2,2,4,1,0,0,0,0,0,0],[0,0,8,9,9,2,6,1,2,3,3,2,2,4,2,2,4,1,0,0,0,0,0,0],[0,0,3,3,3,0,3,0,0,2,1,0,4,0,3,1,0,0,0,0,0,0,0,0],[0,0,3,3,3,0,3,0,0,2,1,0,4,0,3,1,0,0,0,0,0,0,0,0],[0,0,8,9,9,2,6,1,2,3,3,2,2,4,2,2,4,1,0,0,0,0,0,0],[0,0,8,9,9,2,6,1,2,3,3,2,2,4,2,2,4,1,0,0,0,0,0,0],[0,0,8,9,9,2,6,1,2,3,3,2,2,4,2,2,4,1,0,0,0,0,0,0]],"turan_ave":[[0,0,8,9,9,2,6,1,2,3,3,2,2,4,2,2,4,1,0,0,0,0,0,0],[0,0,8,9,9,2,6,1,2,3,3,2,2,4,2,2,4,1,0,0,0,0,0,0],[0,0,3,3,3,0,3,0,0,2,1,0,4,0,3,1,0,0,0,0,0,0,0,0],[0,0,3,3,3,0,3,0,0,2,1,0,4,0,3,1,0,0,0,0,0,0,0,0],[0,0,8,9,9,2,6,1,2,3,3,2,2,4,2,2,4,1,0,0,0,0,0,0],[0,0,8,9,9,2,6,1,2,3,3,2,2,4,2,2,4,1,0,0,0,0,0,0],[0,0,8,9,9,2,6,1,2,3,3,2,2,4,2,2,4,1,0,0,0,0,0,0]],"mangilik_el":[[0,0,8,9,9,2,6,1,2,3,3,2,2,4,2,2,4,1,0,0,0,0,0,0],[0,0,8,9,9,2,6,1,2,3,3,2,2,4,2,2,4,1,0,0,0,0,0,0],[0,0,3,3,3,0,3,0,0,2,1,0,4,0,3,1,0,0,0,0,0,0,0,0],[0,0,3,3,3,0,3,0,0,2,1,0,4,0,3,1,0,0,0,0,0,0,0,0],[0,0,8,9,9,2,6,1,2,3,3,2,2,4,2,2,4,1,0,0,0,0,0,0],[0,0,8,9,9,2,6,1,2,3,3,2,2,4,2,2,4,1,0,0,0,0,0,0],[0,0,8,9,9,2,6,1,2,3,3,2,2,4,2,2,4,1,0,0,0,0,0,0]],"tauelsizdik_ave":[[0,0,8,9,9,2,6,1,2,3,3,2,2,4,2,2,4,1,0,0,0,0,0,0],[0,0,8,9,9,2,6,1,2,3,3,2,2,4,2,2,4,1,0,0,0,0,0,0],[0,0,3,3,3,0,3,0,0,2,1,0,4,0,3,1,0,0,0,0,0,0,0,0],[0,0,3,3,3,0,3,0,0,2,1,0,4,0,3,1,0,0,0,0,0,0,0,0],[0,0,8,9,9,2,6,1,2,3,3,2,2,4,2,2,4,1,0,0,0,0,0,0],[0,0,8,9,9,2,6,1,2,3,3,2,2,4,2,2,4,1,0,0,0,0,0,0],[0,0,8,9,9,2,6,1,2,3,3,2,2,4,2,2,4,1,0,0,0,0,0,0]],"turan_ave_n":[[1,0,11,12,12,3,8,1,3,3,5,3,4,4,3,4,6,3,2,1,2,1,0,1],[1,0,11,12,12,3,8,1,3,3,5,3,4,4,3,4,6,3,2,1,2,1,0,1],[0,0,4,4,4,0,4,0,0,3,1,0,3,0,2,1,0,0,0,0,0,0,0,0],[0,0,4,4,4,0,4,0,0,3,1,0,3,0,2,1,0,0,0,0,0,0,0,0],[1,0,11,12,12,3,8,1,3,3,5,3,4,4,3,4,6,3,2,1,2,1,0,1],[1,0,11,12,12,3,8,1,3,3,5,3,4,4,3,4,6,3,2,1,2,1,0,1],[1,0,11,12,12,3,8,1,3,3,5,3,4,4,3,4,6,3,2,1,2,1,0,1]],"dostyk_left_bank":[[1,0,11,12,12,3,8,1,3,3,5,3,4,4,3,4,6,3,2,1,2,1,0,1],[1,0,11,12,12,3,8,1,3,3,5,3,4,4,3,4,6,3,2,1,2,1,0,1],[0,0,4,4,4,0,4,0,0,3,1,0,3,0,2,1,0,0,0,0,0,0,0,0],[0,0,4,4,4,0,4,0,0,3,1,0,3,0,2,1,0,0,0,0,0,0,0,0],[1,0,11,12,12,3,8,1,3,3,5,3,4,4,3,4,6,3,2,1,2,1,0,1],[1,0,11,12,12,3,8,1,3,3,5,3,4,4,3,4,6,3,2,1,2,1,0,1],[1,0,11,12,12,3,8,1,3,3,5,3,4,4,3,4,6,3,2,1,2,1,0,1]],"respublika_ave":[[1,0,11,12,12,3,8,1,3,3,5,3,4,4,3,4,6,3,2,1,2,1,0,1],[1,0,11,12,12,3,8,1,3,3,5,3,4,4,3,4,6,3,2,1,2,1,0,1],[0,0,4,4,4,0,4,0,0,3,1,0,3,0,2,1,0,0,0,0,0,0,0,0],[0,0,4,4,4,0,4,0,0,3,1,0,3,0,2,1,0,0,0,0,0,0,0,0],[1,0,11,12,12,3,8,1,3,3,5,3,4,4,3,4,6,3,2,1,2,1,0,1],[1,0,11,12,12,3,8,1,3,3,5,3,4,4,3,4,6,3,2,1,2,1,0,1],[1,0,11,12,12,3,8,1,3,3,5,3,4,4,3,4,6,3,2,1,2,1,0,1]],"abay_ave":[[1,0,11,12,12,3,8,1,3,3,5,3,4,4,3,4,6,3,2,1,2,1,0,1],[1,0,11,12,12,3,8,1,3,3,5,3,4,4,3,4,6,3,2,1,2,1,0,1],[0,0,4,4,4,0,4,0,0,3,1,0,3,0,2,1,0,0,0,0,0,0,0,0],[0,0,4,4,4,0,4,0,0,3,1,0,3,0,2,1,0,0,0,0,0,0,0,0],[1,0,11,12,12,3,8,1,3,3,5,3,4,4,3,4,6,3,2,1,2,1,0,1],[1,0,11,12,12,3,8,1,3,3,5,3,4,4,3,4,6,3,2,1,2,1,0,1],[1,0,11,12,12,3,8,1,3,3,5,3,4,4,3,4,6,3,2,1,2,1,0,1]],"__all__":[[4,0,76,84,84,20,56,8,20,24,32,20,24,32,20,24,40,16,8,4,8,4,0,4],[4,0,76,84,84,20,56,8,20,24,32,20,24,32,20,24,40,16,8,4,8,4,0,4],[0,0,28,28,28,0,28,0,0,20,8,0,28,0,20,8,0,0,0,0,0,0,0,0],[0,0,28,28,28,0,28,0,0,20,8,0,28,0,20,8,0,0,0,0,0,0,0,0],[4,0,76,84,84,20,56,8,20,24,32,20,24,32,20,24,40,16,8,4,8,4,0,4],[4,0,76,84,84,20,56,8,20,24,32,20,24,32,20,24,40,16,8,4,8,4,0,4],[4,0,76,84,84,20,56,8,20,24,32,20,24,32,20,24,40,16,8,4,8,4,0,4]]},"routes":{},"scoreMin":1.016,"scoreMax":2.056,"metrics":{"new avenues":{"selected":"Climatology grid","cv":{"Climatology grid":{"mae":0.0781,"sd":0.0373},"Ridge (tuned)":{"mae":0.0941,"sd":0.024},"Gradient boosting":{"mae":0.071,"sd":0.0258}}},"original avenues":{"selected":"Climatology grid","cv":{"Climatology grid":{"mae":0.0813,"sd":0.0458},"Ridge (tuned)":{"mae":0.1015,"sd":0.0232},"Gradient boosting":{"mae":0.0789,"sd":0.0248}}}},"meta":{"generated":"2026-08-06 09:55 UTC","readings":808,"firstReading":"2026-07-21","lastReading":"2026-08-06","horizonStart":"2026-08-06","horizonEnd":"2026-08-12","weatherSource":"recent per-hour means - no live forecast wired in","distinctDayRows":2,"geometryCoverage":{"abay_ave":0.071,"dostyk_left_bank":0.218,"kabanbay_batyr":0.247,"mangilik_el":1.34,"respublika_ave":0.098,"tauelsizdik_ave":0.162,"turan_ave":0.187,"turan_ave_n":0.494}}};
+
+  const FREE_FLOW_SPEED_KMH_FALLBACK = 45;
+  const ROUTING_URL = "https://routing.api.2gis.com/routing/7.0.0/global";
+
+  function lerp(a, b, t) { return Math.round(a + (b - a) * t); }
+  function hexToRgb(hex) {
+    const n = parseInt(hex.slice(1), 16);
+    return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+  }
+  function rgbToHex(r, g, b) {
+    return "#" + [r, g, b].map((v) => v.toString(16).padStart(2, "0")).join("");
+  }
+  let scaleMode = "global"; // "global" or "normalized"
+
+  function getAvenueScoreRange(avenueId) {
+    const grid = DATA.grid[avenueId];
+    let min = Infinity, max = -Infinity;
+    grid.forEach((row) => row.forEach((score) => {
+      if (score === null) return;
+      if (score < min) min = score;
+      if (score > max) max = score;
+    }));
+    if (!isFinite(min)) return { min: DATA.scoreMin, max: DATA.scoreMax };
+    if (max === min) max = min + 0.01;
+    return { min, max };
+  }
+
+  function currentScaleRange(avenueId) {
+    if (scaleMode === "normalized") return getAvenueScoreRange(avenueId);
+    return { min: DATA.scoreMin, max: DATA.scoreMax };
+  }
+
+  // Relative color scale: green->amber->red->darkRed stretched across
+  // whichever range is passed in. In "global" mode this is the whole
+  // model's range (fair comparison ACROSS avenues); in "normalized" mode
+  // it's this one avenue's own min/max (shows ITS OWN pattern clearly,
+  // even for a chronically busier avenue whose "good" hours would
+  // otherwise look uniformly red on the global scale).
+  function relativeColor(score, range) {
+    const green = "#3ddc97", amber = "#f2b84b", red = "#ef5350", darkRed = "#b0201c";
+    const min = range.min, max = range.max;
+    if (max <= min) return green;
+    const t = Math.min(1, Math.max(0, (score - min) / (max - min)));
+    let stops;
+    if (t <= 0.33) stops = [[0, green], [0.33, amber]];
+    else if (t <= 0.66) stops = [[0.33, amber], [0.66, red]];
+    else stops = [[0.66, red], [1.0, darkRed]];
+    const [loT, loColor] = stops[0];
+    const [hiT, hiColor] = stops[1];
+    const localT = (t - loT) / (hiT - loT);
+    const [r1, g1, b1] = hexToRgb(loColor);
+    const [r2, g2, b2] = hexToRgb(hiColor);
+    return rgbToHex(lerp(r1, r2, localT), lerp(g1, g2, localT), lerp(b1, b2, localT));
+  }
+
+  function formatHour(h) {
+    const period = h < 12 ? "am" : "pm";
+    let h12 = h % 12;
+    if (h12 === 0) h12 = 12;
+    return h12 + period;
+  }
+
+  function parseLineString(wkt) {
+    const inner = wkt.slice(wkt.indexOf("(") + 1, wkt.lastIndexOf(")"));
+    return inner.split(",").map((pair) => pair.trim().split(/\s+/).map(Number));
+  }
+  function perpendicularDistance(pt, lineStart, lineEnd) {
+    const [x, y] = pt, [x1, y1] = lineStart, [x2, y2] = lineEnd;
+    const dx = x2 - x1, dy = y2 - y1;
+    if (dx === 0 && dy === 0) return Math.hypot(x - x1, y - y1);
+    const t = ((x - x1) * dx + (y - y1) * dy) / (dx * dx + dy * dy);
+    const px = x1 + t * dx, py = y1 + t * dy;
+    return Math.hypot(x - px, y - py);
+  }
+  function simplifyPath(points, tolerance) {
+    if (points.length < 3) return points;
+    let maxDist = 0, index = 0;
+    for (let i = 1; i < points.length - 1; i++) {
+      const d = perpendicularDistance(points[i], points[0], points[points.length - 1]);
+      if (d > maxDist) { maxDist = d; index = i; }
+    }
+    if (maxDist > tolerance) {
+      const left = simplifyPath(points.slice(0, index + 1), tolerance);
+      const right = simplifyPath(points.slice(index), tolerance);
+      return left.slice(0, -1).concat(right);
+    }
+    return [points[0], points[points.length - 1]];
+  }
+  async function fetchAvenueRoute(avenue, apiKey, maxRetries = 4) {
+    const payload = {
+      points: [
+        { type: "stop", lat: avenue.start.lat, lon: avenue.start.lon },
+        { type: "stop", lat: avenue.end.lat, lon: avenue.end.lon },
+      ],
+      locale: "en", transport: "driving", route_mode: "fastest", traffic_mode: "jam",
+    };
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      try {
+        const res = await fetch(ROUTING_URL + "?key=" + encodeURIComponent(apiKey), {
+          method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload),
+        });
+
+        // Same short-term rate limit collector.py hit -- retry with a
+        // short backoff instead of immediately giving up, since firing
+        // many avenue requests close together can trip it.
+        if (res.status === 429) {
+          if (attempt < maxRetries) {
+            // Exponential with jitter: a fixed ramp makes repeated attempts
+            // land in the same rate-limit window over and over.
+            const wait = Math.round(600 * Math.pow(2, attempt) * (1 + Math.random()));
+            console.warn(avenue.id + ": rate limited (429), retrying in " + wait + "ms");
+            await new Promise((r) => setTimeout(r, wait));
+            continue;
+          }
+          throw new Error("still rate limited after " + maxRetries + " retries");
+        }
+        if (res.status === 401 || res.status === 403) {
+          // A MapGL (tiles) key is not a Routing API key -- 2GIS issues them
+          // separately, and retrying will never turn one into the other.
+          throw new Error("HTTP " + res.status + " \u2014 this key is not authorised for the "
+            + "Routing API (a MapGL/tiles key will not work here)");
+        }
+        if (!res.ok) throw new Error("HTTP " + res.status);
+
+        const data = await res.json();
+        const result = data.result && data.result[0];
+        if (!result) throw new Error("no route");
+        let coords = [];
+        (result.maneuvers || []).forEach((m) => {
+          const geom = m.outcoming_path && m.outcoming_path.geometry;
+          if (!geom) return;
+          geom.forEach((g) => { coords = coords.concat(parseLineString(g.selection)); });
+        });
+        if (coords.length < 2) throw new Error("empty geometry");
+        return { coords: simplifyPath(coords, 0.00008), usedFallback: false };
+      } catch (err) {
+        if (attempt >= maxRetries) {
+          // A bare "Failed to fetch" from a POST that never reached the server
+          // is almost always CORS -- typically because the page was opened as a
+          // file:// URL, which sends Origin: null.
+          const looksLikeCors = err instanceof TypeError
+            || /failed to fetch|networkerror|load failed/i.test(err.message || "");
+          const reason = looksLikeCors
+            ? "the browser blocked the request before it was sent (CORS)"
+              + (location.protocol === "file:"
+                  ? " \u2014 the page is open as a file://, try serving it over http"
+                  : "")
+            : err.message;
+          console.warn("Falling back to straight line for " + avenue.id + ": " + reason);
+          return {
+            coords: [[avenue.start.lon, avenue.start.lat], [avenue.end.lon, avenue.end.lat]],
+            usedFallback: true, reason: reason,
+          };
+        }
+        // Non-429 errors (network blip etc.) also get one retry before falling back
+        await new Promise((r) => setTimeout(r, 500));
+      }
+    }
+    return {
+      coords: [[avenue.start.lon, avenue.start.lat], [avenue.end.lon, avenue.end.lat]],
+      usedFallback: true, reason: "route request exhausted its retries",
+    };
+  }
+
+  const MONTH_NAMES = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  function getUpcomingDays(dayNames) {
+    const nowAstana = new Date(Date.now() + 5 * 3600 * 1000);
+    const days = [];
+    for (let i = 0; i < 7; i++) {
+      const d = new Date(nowAstana.getTime() + i * 86400000);
+      let dow = d.getUTCDay() - 1;
+      if (dow < 0) dow = 6;
+      const label = (i === 0 ? "Today, " : dayNames[dow].slice(0, 3) + ", ") + MONTH_NAMES[d.getUTCMonth()] + " " + d.getUTCDate();
+      days.push({ dow, label, fullLabel: dayNames[dow] + ", " + MONTH_NAMES[d.getUTCMonth()] + " " + d.getUTCDate() });
+    }
+    return days;
+  }
+
+
+  const DAY_NAMES = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
+
+  // Row i is DATA.days[i]: a real calendar date the forecast was produced for,
+  // so the day index is the grid index. No day-of-week lookup is involved.
+  const forecastDays = DATA.days.map((d, i) => {
+    const [y, m, day] = d.date.split("-").map(Number);
+    const label = (i === 0 ? "Today" : DAY_NAMES[d.dow]) + ", " + MONTH_NAMES[m - 1] + " " + day;
+    return { index: i, date: d.date, dow: d.dow, label: label };
+  });
+
+  // Hours with no readings are disabled in the dropdown so a blank cell can
+  // never be reached through the selectors either.
+  function refreshHourOptions() {
+    const grid = DATA.grid[els.avenueSelect.value] || DATA.grid[DATA.avenues[0].id];
+    const dt = Number(els.daySelect.value) || 0;
+    Array.from(els.hourSelect.options).forEach((opt) => {
+      const has = grid[dt][Number(opt.value)] !== null;
+      opt.disabled = !has;
+      opt.textContent = opt.textContent.replace(" \u2014 no data", "") + (has ? "" : " \u2014 no data");
+    });
+  }
+
+  const dayLabels = {};
+  forecastDays.forEach((d) => { dayLabels[d.index] = d.label; });
+
+  const els = {
+    avenueSelect: document.getElementById("avenue-select"),
+    daySelect: document.getElementById("day-select"),
+    hourSelect: document.getElementById("hour-select"),
+    selectedResult: document.getElementById("selected-result"),
+    bestTime: document.getElementById("best-time"),
+    worstTime: document.getElementById("worst-time"),
+    table: document.getElementById("heatmap-table"),
+    legend: document.getElementById("legend"),
+    mapContainer: document.getElementById("map-container"),
+    mapLoading: document.getElementById("map-loading"),
+    routeWarning: document.getElementById("route-warning"),
+  };
+  const tooltip = document.getElementById("tooltip");
+
+  // ---- Populate dropdowns ----
+  DATA.avenues.forEach((av) => {
+    const opt = document.createElement("option");
+    opt.value = av.id; opt.textContent = av.name;
+    els.avenueSelect.appendChild(opt);
+  });
+  forecastDays.forEach((day) => {
+    const opt = document.createElement("option");
+    opt.value = day.index; opt.textContent = day.label;
+    els.daySelect.appendChild(opt);
+  });
+  for (let h = 0; h < 24; h++) {
+    const opt = document.createElement("option");
+    opt.value = h; opt.textContent = formatHour(h) + " (" + String(h).padStart(2, "0") + ":00)";
+    els.hourSelect.appendChild(opt);
+  }
+  const nowAstana = new Date(Date.now() + 5 * 3600 * 1000);
+  els.daySelect.value = 0;
+  const openGrid = DATA.grid[DATA.avenues[0].id][0];
+  const nowHour = nowAstana.getUTCHours();
+  els.hourSelect.value = openGrid[nowHour] !== null
+    ? nowHour
+    : openGrid.findIndex((v) => v !== null);
+
+  const info = DATA.meta;
+  const horizonEl = document.getElementById("horizon-line");
+  if (horizonEl) {
+    horizonEl.textContent =
+      "Forecast horizon " + info.horizonStart + " \u2192 " + info.horizonEnd +
+      "  \u00b7  generated " + info.generated +
+      "  \u00b7  trained on " + info.readings + " readings (" +
+      info.firstReading + " \u2013 " + info.lastReading + ")";
+  }
+
+  const modelEl = document.getElementById("model-note");
+  if (modelEl) {
+    const parts = Object.keys(DATA.metrics).map((k) => {
+      const m = DATA.metrics[k];
+      const scored = Object.keys(m.cv)
+        .map((n) => n + " " + m.cv[n].mae.toFixed(3) + "\u00b1" + m.cv[n].sd.toFixed(3))
+        .join(", ");
+      return k + ": using " + m.selected + " (CV MAE \u2014 " + scored + ")";
+    });
+    modelEl.textContent = "Predictor selection \u2014 " + parts.join("; ") + ".";
+  }
+
+  const covEl = document.getElementById("coverage-note");
+  if (covEl && info.distinctDayRows < DATA.days.length) {
+    covEl.textContent =
+      "Note: the seven day rows currently resolve to " + info.distinctDayRows +
+      " distinct patterns, because weekday/weekend is the only calendar feature the data supports and " +
+      "future weather is held at " + info.weatherSource +
+      ". Wiring a real per-day weather forecast is what will make the seven rows genuinely differ.";
+  }
+
+  // ---- Legend (dynamic: reflects whichever range is currently active) ----
+  function renderLegend(range) {
+    const scopeLabel = scaleMode === "normalized" ? "this avenue's own range" : "all observed data";
+    els.legend.innerHTML =
+      '<span>Congestion (relative to ' + scopeLabel + '):</span>' +
+      '<span class="swatch"><span class="dot" style="background:#3ddc97"></span> ' + range.min.toFixed(2) + '&times; (fastest observed)</span>' +
+      '<span class="swatch"><span class="dot" style="background:#f2b84b"></span> mid</span>' +
+      '<span class="swatch"><span class="dot" style="background:#ef5350"></span> higher</span>' +
+      '<span class="swatch"><span class="dot" style="background:#b0201c"></span> ' + range.max.toFixed(2) + '&times; (slowest observed)</span>' +
+      '<span class="swatch"><span class="dot" style="background:var(--bg-sunken);box-shadow:inset 0 0 0 1px var(--border-soft)"></span> blank = no readings collected</span>' +
+      '<span class="swatch"><span class="dot" style="background:transparent;box-shadow:inset 0 0 0 2px rgba(169,106,8,0.85)"></span> fewer than 3 readings</span>';
+  }
+
+  // ---- Build the heatmap grid (rows = upcoming real dates, cols = hours) ----
+  function buildTable() {
+    els.table.innerHTML = "";
+    const headRow = document.createElement("tr");
+    headRow.appendChild(document.createElement("th"));
+    for (let h = 0; h < 24; h++) {
+      const th = document.createElement("th");
+      th.className = "hour-label";
+      th.textContent = h % 3 === 0 ? formatHour(h) : "";
+      headRow.appendChild(th);
+    }
+    els.table.appendChild(headRow);
+
+    forecastDays.forEach((day) => {
+      const dt = day.index;
+      const tr = document.createElement("tr");
+      const th = document.createElement("th");
+      th.className = "day-label"; th.textContent = day.label;
+      tr.appendChild(th);
+      for (let h = 0; h < 24; h++) {
+        const td = document.createElement("td");
+        td.className = "cell";
+        td.dataset.dt = dt; td.dataset.hour = h;
+        tr.appendChild(td);
+      }
+      els.table.appendChild(tr);
+    });
+  }
+
+  // ---- Render one avenue's heatmap coloring ----
+  function renderAvenue(avenueId) {
+    const grid = DATA.grid[avenueId];
+    const range = currentScaleRange(avenueId);
+    const counts = DATA.counts[avenueId];
+    const avenue = DATA.avenues.find((a) => a.id === avenueId);
+    renderLegend(range);
+    els.table.querySelectorAll("td.cell").forEach((td) => {
+      const dt = Number(td.dataset.dt), hour = Number(td.dataset.hour);
+      const score = grid[dt][hour];
+      const n = counts[dt][hour];
+
+      // No reading for this hour => genuinely blank. No colour is invented,
+      // no tooltip value is offered, and the cell cannot be selected.
+      if (score === null) {
+        td.classList.add("nodata");
+        td.classList.remove("lown");
+        td.style.backgroundColor = "";
+        td.onmouseenter = () => {
+          tooltip.innerHTML =
+            '<div class="t-time">' + dayLabels[dt] + " \u00b7 " + formatHour(hour) + '</div>' +
+            "No readings collected yet" +
+            '<div class="t-hint">Nothing is estimated for empty hours</div>';
+          tooltip.style.display = "block";
+        };
+        td.onmousemove = (e) => {
+          tooltip.style.left = (e.clientX + 14) + "px";
+          tooltip.style.top = (e.clientY + 14) + "px";
+        };
+        td.onmouseleave = () => { tooltip.style.display = "none"; };
+        td.onclick = null;
+        return;
+      }
+
+      td.classList.remove("nodata");
+      td.style.backgroundColor = relativeColor(score, range);
+      td.classList.toggle("lown", n < 3);
+
+      const lowNote = n < 3
+        ? '<div class="t-hint" style="color:var(--accent-gold);opacity:1;">\u26a0 Only ' + n + ' reading' + (n === 1 ? '' : 's') + ' \u2014 indicative only</div>'
+        : '<div class="t-hint">Based on ' + n + ' readings</div>';
+
+      td.onmouseenter = () => {
+        if (avenue.isCombined) {
+          tooltip.innerHTML =
+            '<div class="t-time">' + dayLabels[dt] + " \u00b7 " + formatHour(hour) + '</div>' +
+            "Avg congestion: " + score.toFixed(2) + "&times;<br>" +
+            '<span style="opacity:0.7">(average across avenues with data)</span>' +
+            lowNote;
+        } else {
+          const durationSec = (avenue.medianDistanceM / 1000) / avenue.freeFlowSpeedKmh * 3600 * score;
+          const speedKmh = (avenue.medianDistanceM / 1000) / (durationSec / 3600);
+          tooltip.innerHTML =
+            '<div class="t-time">' + dayLabels[dt] + " \u00b7 " + formatHour(hour) + '</div>' +
+            "Congestion: " + score.toFixed(2) + "&times;<br>" +
+            "Est. duration: " + Math.round(durationSec / 60) + " min<br>" +
+            "Est. speed: " + speedKmh.toFixed(1) + " km/h" +
+            lowNote;
+        }
+        tooltip.style.display = "block";
+      };
+      td.onmousemove = (e) => {
+        tooltip.style.left = (e.clientX + 14) + "px";
+        tooltip.style.top = (e.clientY + 14) + "px";
+      };
+      td.onmouseleave = () => { tooltip.style.display = "none"; };
+
+      td.onclick = () => {
+        els.daySelect.value = dt;
+        els.hourSelect.value = hour;
+        updateSelectedResult();
+      };
+    });
+  }
+
+  // ---- Best/worst time, scoped to the CURRENTLY SELECTED DAY only ----
+  function updateBestWorstForSelectedDay() {
+    const avenueId = els.avenueSelect.value;
+    const dt = Number(els.daySelect.value);
+    const grid = DATA.grid[avenueId][dt];
+
+    // Only hours that were actually observed can win or lose.
+    const observed = [];
+    grid.forEach((score, hour) => { if (score !== null) observed.push(hour); });
+    if (observed.length === 0) {
+      els.bestTime.textContent = "\u2014 no data";
+      els.worstTime.textContent = "\u2014 no data";
+      return;
+    }
+    let bestHour = observed[0], worstHour = observed[0];
+    observed.forEach((hour) => {
+      if (grid[hour] < grid[bestHour]) bestHour = hour;
+      if (grid[hour] > grid[worstHour]) worstHour = hour;
+    });
+
+    const dayLabel = dayLabels[dt];
+    els.bestTime.textContent = dayLabel + " " + formatHour(bestHour) + " (" + grid[bestHour].toFixed(2) + "\u00d7)";
+    els.worstTime.textContent = dayLabel + " " + formatHour(worstHour) + " (" + grid[worstHour].toFixed(2) + "\u00d7)";
+  }
+
+  // ---- Map ----
+  let mapRef = null;
+  let routePolyline = null;
+  let routeCasing = null;
+  let apiKeyRef = null;
+  let routeToken = 0;
+  const routeCache = {};    // avenue id -> { coords, usedFallback }
+  const routeInFlight = {}; // avenue id -> Promise, so a fast click can't double-fetch
+
+  // Only the avenue actually being displayed is routed. Loading all eight at
+  // startup was what tripped the rate limit and produced straight lines.
+  function ensureRoute(avenue) {
+    // Geometry baked into the payload at build time needs no network call at
+    // all. Populated by build_forecast.py once the collector stores full
+    // routing responses; until then this is empty and we fall back to fetching.
+    const baked = DATA.routes && DATA.routes[avenue.id];
+    if (baked && baked.length >= 2) {
+      routeCache[avenue.id] = { coords: baked, usedFallback: false };
+      return Promise.resolve(routeCache[avenue.id]);
+    }
+    if (routeCache[avenue.id]) return Promise.resolve(routeCache[avenue.id]);
+    if (routeInFlight[avenue.id]) return routeInFlight[avenue.id];
+    routeInFlight[avenue.id] = fetchAvenueRoute(avenue, apiKeyRef).then((result) => {
+      routeCache[avenue.id] = result;
+      delete routeInFlight[avenue.id];
+      return result;
+    });
+    return routeInFlight[avenue.id];
+  }
+
+  // Frame the map on the route itself. The old code only re-centred and left
+  // zoom pinned at 11, so a 2 km avenue and a 14.5 km one were shown at the
+  // same scale -- one filled the frame, the other was a thread across the city.
+  function fitToRoute(coords) {
+    let minLon = Infinity, minLat = Infinity, maxLon = -Infinity, maxLat = -Infinity;
+    coords.forEach((c) => {
+      if (c[0] < minLon) minLon = c[0];
+      if (c[0] > maxLon) maxLon = c[0];
+      if (c[1] < minLat) minLat = c[1];
+      if (c[1] > maxLat) maxLat = c[1];
+    });
+    if (!isFinite(minLon)) return;
+    try {
+      mapRef.fitBounds(
+        { northEast: [maxLon, maxLat], southWest: [minLon, minLat] },
+        { padding: { top: 56, right: 56, bottom: 56, left: 56 }, animate: false }
+      );
+    } catch (err) {
+      // Older MapGL builds without fitBounds still get a sensible centre.
+      mapRef.setCenter([(minLon + maxLon) / 2, (minLat + maxLat) / 2]);
+    }
+  }
+
+  function clearRoute() {
+    [routeCasing, routePolyline].forEach((p) => { if (p && p.destroy) p.destroy(); });
+    routeCasing = null;
+    routePolyline = null;
+  }
+
+  function drawRoute(avenue, score, coords) {
+    clearRoute();
+    const range = currentScaleRange(avenue.id);
+    // White casing under the coloured line, the way 2GIS draws its own routes:
+    // keeps the line legible over both pale streets and dark park polygons.
+    routeCasing = new mapgl.Polyline(mapRef, {
+      coordinates: coords, width: 12, color: "#ffffff", zIndex: 1,
+    });
+    routePolyline = new mapgl.Polyline(mapRef, {
+      coordinates: coords, width: 6, color: relativeColor(score, range), zIndex: 2,
+    });
+    fitToRoute(coords);
+  }
+
+  function showRouteWarning(avenue, reason) {
+    els.routeWarning.style.display = "block";
+    els.routeWarning.innerHTML =
+      "\u26a0 Couldn't load the real road route for " + avenue.name +
+      " \u2014 showing a straight line. " +
+      (reason ? "<br><span style=\"opacity:.85\">Reason: " + reason + "</span> " : "") +
+      '<button type="button" id="route-retry" style="background:none;border:none;' +
+      'color:var(--accent-turquoise);text-decoration:underline;cursor:pointer;font:inherit;padding:0;">' +
+      "Retry</button>";
+    const btn = document.getElementById("route-retry");
+    if (btn) {
+      btn.onclick = () => {
+        delete routeCache[avenue.id];
+        els.routeWarning.style.display = "none";
+        updateSelectedResult();
+      };
+    }
+  }
+
+  function updateMapRoute(avenue, score) {
+    if (!mapRef || avenue.isCombined || score === null) return;
+    const token = ++routeToken;
+
+    const cached = routeCache[avenue.id];
+    if (cached) {
+      drawRoute(avenue, score, cached.coords);
+      if (cached.usedFallback) showRouteWarning(avenue, cached.reason); else els.routeWarning.style.display = "none";
+      return;
+    }
+
+    // Draw the chord immediately so the map is never empty, then upgrade to
+    // the real geometry once it arrives.
+    drawRoute(avenue, score, [[avenue.start.lon, avenue.start.lat], [avenue.end.lon, avenue.end.lat]]);
+    els.mapLoading.textContent = "Loading road route\u2026";
+    els.mapLoading.style.display = "block";
+
+    ensureRoute(avenue).then((result) => {
+      // The user may have switched avenues while this was in flight.
+      if (token !== routeToken) return;
+      els.mapLoading.style.display = "none";
+      drawRoute(avenue, score, result.coords);
+      if (result.usedFallback) showRouteWarning(avenue, result.reason); else els.routeWarning.style.display = "none";
+    });
+  }
+
+  // ---- Selected-time readout + highlight + map update ----
+  function updateSelectedResult() {
+    const avenueId = els.avenueSelect.value;
+    const avenue = DATA.avenues.find((a) => a.id === avenueId);
+    const dt = Number(els.daySelect.value), hour = Number(els.hourSelect.value);
+    const score = DATA.grid[avenueId][dt][hour];
+    const n = DATA.counts[avenueId][dt][hour];
+    refreshHourOptions();
+
+    if (score === null) {
+      els.selectedResult.textContent = "No readings collected for this hour";
+    } else {
+      const nNote = n < 3 ? " \u2014 only " + n + " reading" + (n === 1 ? "" : "s") : "";
+      if (avenue.isCombined) {
+        els.selectedResult.textContent = "Avg " + score.toFixed(2) + "\u00d7 across avenues with data" + nNote;
+      } else {
+        const durationSec = (avenue.medianDistanceM / 1000) / avenue.freeFlowSpeedKmh * 3600 * score;
+        const speedKmh = (avenue.medianDistanceM / 1000) / (durationSec / 3600);
+        els.selectedResult.textContent = score.toFixed(2) + "\u00d7 \u2014 " + Math.round(durationSec / 60) + " min (" + speedKmh.toFixed(1) + " km/h)" + nNote;
+      }
+    }
+
+    els.table.querySelectorAll("td.cell").forEach((td) => td.classList.remove("selected"));
+    const cell = els.table.querySelector('td.cell[data-dt="' + dt + '"][data-hour="' + hour + '"]');
+    if (cell && score !== null) cell.classList.add("selected");
+
+    updateBestWorstForSelectedDay();
+    updateMapRoute(avenue, score);
+  }
+
+  buildTable();
+  refreshHourOptions();
+  renderAvenue(els.avenueSelect.value);
+  updateSelectedResult();
+
+  document.querySelectorAll('input[name="scale-mode"]').forEach((radio) => {
+    radio.addEventListener("change", (e) => {
+      scaleMode = e.target.value;
+      renderAvenue(els.avenueSelect.value);
+      updateSelectedResult();
+    });
+  });
+
+  els.avenueSelect.addEventListener("change", () => {
+    renderAvenue(els.avenueSelect.value);
+    updateSelectedResult();
+  });
+  els.daySelect.addEventListener("change", () => { renderAvenue(els.avenueSelect.value); updateSelectedResult(); });
+  els.hourSelect.addEventListener("change", updateSelectedResult);
+
+  // ---- Map key entry ----
+  function initMap(apiKey) {
+    document.getElementById("key-overlay").style.display = "none";
+    apiKeyRef = apiKey;
+    mapRef = new mapgl.Map(els.mapContainer, { center: [71.43, 51.11], zoom: 11, key: apiKey });
+    els.mapLoading.style.display = "none";
+
+    // One request, for the avenue on screen. Others load when selected.
+    const avenueId = els.avenueSelect.value;
+    const avenue = DATA.avenues.find((a) => a.id === avenueId);
+    const dt = Number(els.daySelect.value), hour = Number(els.hourSelect.value);
+    updateMapRoute(avenue, DATA.grid[avenueId][dt][hour]);
+  }
+
+  document.getElementById("key-submit").addEventListener("click", () => {
+    const key = document.getElementById("key-input").value.trim();
+    if (!key) return;
+    initMap(key);
+  });
+  document.getElementById("key-skip").addEventListener("click", () => {
+    document.getElementById("key-overlay").style.display = "none";
+  });
+  document.getElementById("key-input").addEventListener("keydown", (e) => {
+    if (e.key === "Enter") document.getElementById("key-submit").click();
+  });
+</script>
+</body>
+</html>
