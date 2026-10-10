@@ -177,7 +177,7 @@ def fetch_segment_duration_with_retry(session: requests.Session, api_key: str, s
     return None
 
 
-def fetch_weather(session: requests.Session) -> dict | None:
+#def fetch_weather(session: requests.Session) -> dict | None:
     """Pull current weather for Astana from Open-Meteo (free, no key)."""
     params = {
         "latitude": config.ASTANA_LAT,
@@ -201,7 +201,7 @@ def fetch_weather(session: requests.Session) -> dict | None:
         return None
 
 
-def poll_once(conn: sqlite3.Connection, api_key: str) -> None:
+#def poll_once(conn: sqlite3.Connection, api_key: str) -> None:
     session = requests.Session()
     timestamp = datetime.now(timezone.utc).isoformat()
     succeeded = 0
